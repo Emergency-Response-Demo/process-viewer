@@ -17,8 +17,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.reactivex.core.AbstractVerticle;
 import io.vertx.reactivex.core.eventbus.Message;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.commons.lang3.tuple.Triple;
 import org.jbpm.process.svg.SVGImageProcessor;
 
 public class ImageVerticle extends AbstractVerticle {
@@ -29,9 +27,9 @@ public class ImageVerticle extends AbstractVerticle {
         vertx.eventBus().<JsonObject>consumer("process-image").toObservable()
                 .subscribe(this::image);
         vertx.eventBus().<JsonObject>consumer("process-instance-image").toObservable()
-                .subscribe(this::instanceImage);
+                .subscribe(m -> instanceData(m, false));
         vertx.eventBus().<JsonObject>consumer("process-instance-data").toObservable()
-                .subscribe(this::instanceData);
+                .subscribe(m -> instanceData(m, true));
         return Completable.complete();
 
     }
@@ -44,64 +42,15 @@ public class ImageVerticle extends AbstractVerticle {
 
     }
 
-    private void instanceImage(Message<JsonObject> message) {
+    private void instanceData(Message<JsonObject> message, boolean data) {
         String correlationKey = message.body().getString("correlationKey");
-        process(correlationKey).flatMap(json ->
-                Single.zip(imageAsByteArray(json.getString("processid")),
-                        historyActive(json.getLong("processinstanceid")),
-                        historyComplete(json.getLong("processinstanceid")),
-                        (image, historyActive, historyComplete) -> {
-                            Map<String, String> subProcessLinks = new HashMap<>();
-                            Map<String, String> active = historyActive.stream().collect(Collectors.toMap(
-                                    k -> ((JsonObject) k).getString("nodeinstanceid"),
-                                    v -> ((JsonObject) v).getString("nodeid")));
-                            List<String> completed = historyComplete.stream().map(o -> {
-                                JsonObject json1 = (JsonObject)o;
-                                active.remove(json1.getString("nodeinstanceid"));
-                                return json1.getString("nodeid");
-                            }).collect(Collectors.toList());
-                            ByteArrayInputStream svgStream = new ByteArrayInputStream(image);
-                            return Triple.of(svgStream, completed, new ArrayList<>(active.values()));
-                        })
-                .flatMap(t -> processImage(t.getLeft(), t.getMiddle(), t.getRight()))
-                .map(s -> s.replaceFirst("<\\?.*\\?>","")))
-                .subscribe((result) -> message.reply(new JsonObject().put("image", result)),
-                        (err) -> {
-                            if (err instanceof ReplyException) {
-                                message.fail(((ReplyException)err).failureCode(), err.getMessage());
-                            } else {
-                                message.fail(-1, err.getMessage());
-                            }
-                        });
-    }
-
-    private void instanceData(Message<JsonObject> message) {
-        String correlationKey = message.body().getString("correlationKey");
-
         process(correlationKey)
-                .flatMap(this::addProcessVariables)
-                .flatMap(json ->
-                Single.zip(Single.just(json), imageAsByteArray(json.getString("processid")),
-                        historyActive(json.getLong("processinstanceid")),
-                        historyComplete(json.getLong("processinstanceid")),
-                        (json1, image, historyActive, historyComplete) -> {
-                            Map<String, String> subProcessLinks = new HashMap<>();
-                            Map<String, String> active = historyActive.stream().collect(Collectors.toMap(
-                                    k -> ((JsonObject) k).getString("nodeinstanceid"),
-                                    v -> ((JsonObject) v).getString("nodeid")));
-                            List<String> completed = historyComplete.stream().map(o -> {
-                                JsonObject json2 = (JsonObject)o;
-                                active.remove(json2.getString("nodeinstanceid"));
-                                return json2.getString("nodeid");
-                            }).collect(Collectors.toList());
-                            ByteArrayInputStream svgStream = new ByteArrayInputStream(image);
-                            return Pair.of(json1, Triple.of(svgStream, completed, ((List<String>) new ArrayList<>(active.values()))));
-                        })
-                        .flatMap(p -> processImage(p.getLeft(), p.getRight()))
-                        .map(p -> Pair.of(p.getLeft(), p.getRight().replaceFirst("<\\?.*\\?>","")
-                            .replaceFirst("width=\"[0-9]*\"", "width=\"1080\"")
-                            .replaceFirst("height=\"[0-9]*\"","height=\"auto\""))))
-                .subscribe((result) -> message.reply(new JsonObject().put("process", result.getLeft()).put("image", result.getRight())),
+                .compose(json -> data ? json.flatMap(this::addProcessVariables) : json)
+                .flatMap(this::addImage)
+                .flatMap(this::addHistoryActive)
+                .flatMap(this::addHistoryComplete)
+                .flatMap(this::processImage)
+                .subscribe(message::reply,
                         (err) -> {
                             if (err instanceof ReplyException) {
                                 message.fail(((ReplyException)err).failureCode(), err.getMessage());
@@ -116,9 +65,27 @@ public class ImageVerticle extends AbstractVerticle {
                 .flatMapSingle(Single::just);
     }
 
-    private Single<Pair<JsonObject, String>> processImage(JsonObject json, Triple<ByteArrayInputStream, List<String>, List<String>> input) {
-        return  processImage(input.getLeft(), input.getMiddle(), input.getRight())
-                .map(s -> Pair.of(json, s));
+    private Single<JsonObject> processImage(JsonObject json) {
+        Map<String, String> active = json.getJsonArray("historyActive").stream().collect(Collectors.toMap(
+                k -> ((JsonObject) k).getString("nodeinstanceid"),
+                v -> ((JsonObject) v).getString("nodeid")));
+        List<String> completed = json.getJsonArray("historyComplete").stream().map(o -> {
+            JsonObject json2 = (JsonObject)o;
+            active.remove(json2.getString("nodeinstanceid"));
+            return json2.getString("nodeid");
+        }).collect(Collectors.toList());
+        ByteArrayInputStream svgStream = new ByteArrayInputStream(json.getBinary("imageBytes"));
+        return processImage(svgStream, completed, new ArrayList<>(active.values()))
+                .map(image -> image.replaceFirst("<\\?.*\\?>","")
+                        .replaceFirst("width=\"[0-9]*\"", "width=\"1080\"")
+                        .replaceFirst("height=\"[0-9]*\"","height=\"auto\""))
+                .map(image -> json.put("image", image))
+                .map(j -> {
+                    j.remove("imageBytes");
+                    j.remove("historyActive");
+                    j.remove("historyComplete");
+                    return j;
+                });
     }
 
     private Single<String> imageAsString(String processId) {
@@ -140,6 +107,21 @@ public class ImageVerticle extends AbstractVerticle {
 
         return processVariables(processInstance.getLong("processinstanceid"))
                 .map(variables -> processInstance.put("variables", variables));
+    }
+
+    private Single<JsonObject> addHistoryActive(JsonObject processInstance) {
+        return historyActive(processInstance.getLong("processinstanceid"))
+                .map(historyactive -> processInstance.put("historyActive", historyactive));
+    }
+
+    private Single<JsonObject> addHistoryComplete(JsonObject processInstance) {
+        return historyComplete(processInstance.getLong("processinstanceid"))
+                .map(historycomplete -> processInstance.put("historyComplete", historycomplete));
+    }
+
+    private Single<JsonObject> addImage(JsonObject processInstance) {
+        return imageAsByteArray(processInstance.getString("processid"))
+                .map(b -> processInstance.put("imageBytes", b));
     }
 
     private byte[] imageAsBytes(String location) throws IOException {
