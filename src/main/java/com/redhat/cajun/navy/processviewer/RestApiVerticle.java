@@ -48,10 +48,9 @@ public class RestApiVerticle extends AbstractVerticle {
         JsonObject json = new JsonObject().put("processId", processId);
         vertx.eventBus().<JsonObject>rxSend("process-image", json)
                 .map(m -> new JsonObject().put("image", m.body().getString("image")))
-                .flatMap(ctx -> engine.rxRender(ctx, "templates/process-image.ftl"))
                 .subscribe((result) -> rc.response().setStatusCode(200)
-                                        .putHeader("content-type", "text/html")
-                                        .end(result),
+                                        .putHeader("content-type", "image/svg+xml")
+                                        .end(result.getString("image")),
                         rc::fail);
     }
 
@@ -60,10 +59,9 @@ public class RestApiVerticle extends AbstractVerticle {
         JsonObject json = new JsonObject().put("correlationKey", correlationKey);
         vertx.eventBus().<JsonObject>rxSend("process-instance-image", json)
                 .map(m -> new JsonObject().put("image", m.body().getString("image")))
-                .flatMap(ctx -> engine.rxRender(ctx, "templates/process-image.ftl"))
                 .subscribe((result) -> rc.response().setStatusCode(200)
                                         .putHeader("content-type", "image/svg+xml")
-                                        .end(result),
+                                        .end(result.getString("image")),
                         (err) -> {
                             if (err instanceof ReplyException && ((ReplyException)err).failureCode() == 1) {
                                 rc.response().setStatusCode(404).end();
@@ -77,7 +75,7 @@ public class RestApiVerticle extends AbstractVerticle {
         String correlationKey = rc.pathParam("correlationKey");
         JsonObject json = new JsonObject().put("correlationKey", correlationKey);
         vertx.eventBus().<JsonObject>rxSend("process-instance-data", json)
-                .map(m -> transformProcessData(m.body().getJsonObject("process")).put("image", m.body().getString("image")))
+                .map(m -> transformProcessData(m.body()))
                 .flatMap(ctx -> engine.rxRender(ctx, "templates/process-data.ftl"))
                 .subscribe((result) -> rc.response().setStatusCode(200)
                                 .putHeader("content-type", "text/html")
@@ -105,7 +103,8 @@ public class RestApiVerticle extends AbstractVerticle {
                 .put("startDate", out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
                 .put("endDate", data.getString("end<-date") == null ? "" : out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
                 .put("duration", data.getString("duration") == null ? "" : Long.toString(data.getLong("duration") / 1000))
-                .put("assignments_retries", getVariableValue(data.getJsonArray("variables"), "nrAssignments"));
+                .put("assignments_retries", getVariableValue(data.getJsonArray("variables"), "nrAssignments"))
+                .put("image", data.getString("image"));
     }
 
     private String status(int status) {
