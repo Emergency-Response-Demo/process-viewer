@@ -2,9 +2,11 @@ package com.redhat.cajun.navy.processviewer;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 import io.reactivex.Completable;
 import io.vertx.core.eventbus.ReplyException;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.healthchecks.Status;
 import io.vertx.reactivex.core.AbstractVerticle;
@@ -91,6 +93,7 @@ public class RestApiVerticle extends AbstractVerticle {
     }
 
     private JsonObject transformProcessData(JsonObject data) {
+
         DateTimeFormatter in = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         DateTimeFormatter out = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -101,7 +104,8 @@ public class RestApiVerticle extends AbstractVerticle {
                 .put("status", status(data.getInteger("status")))
                 .put("startDate", out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
                 .put("endDate", data.getString("end<-date") == null ? "" : out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
-                .put("duration", data.getString("duration") == null ? "" : Long.toString(data.getLong("duration") / 1000));
+                .put("duration", data.getString("duration") == null ? "" : Long.toString(data.getLong("duration") / 1000))
+                .put("assignments_retries", getVariableValue(data.getJsonArray("variables"), "nrAssignments"));
     }
 
     private String status(int status) {
@@ -120,6 +124,19 @@ public class RestApiVerticle extends AbstractVerticle {
                 return "Unknown Status";
 
         }
+    }
+
+    private String getVariableValue(JsonArray array, String id) {
+
+        return Optional.ofNullable(array)
+                .orElse(new JsonArray())
+                .stream().filter(o -> o instanceof JsonObject)
+                .map(o -> (JsonObject)o)
+                .filter(o -> id.equals(o.getString("variableid")))
+                .map(j -> Optional.ofNullable(j.getString("value")))
+                .findFirst()
+                .orElse(Optional.of(""))
+                .orElse("");
     }
 
 }

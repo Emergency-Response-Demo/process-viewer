@@ -1,6 +1,7 @@
 package com.redhat.cajun.navy.processviewer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -47,11 +48,18 @@ public class DbVerticle extends AbstractVerticle {
                         .flatMap(connection -> processInstanceHistoryActive(connection,
                                 message.body().getJsonObject("parameters").getLong("processInstanceId")))
                         .subscribe((result) -> message.reply(new JsonObject().put("result", new JsonArray(result))),
-                                (err) -> message.fail(0, err.getMessage()));
+                                (err) -> message.fail(-1, err.getMessage()));
                 break;
             case "processInstanceHistoryComplete":
                 connect()
                         .flatMap(connection -> processInstanceHistoryComplete(connection,
+                                message.body().getJsonObject("parameters").getLong("processInstanceId")))
+                        .subscribe((result) -> message.reply(new JsonObject().put("result", new JsonArray(result))),
+                                (err) -> message.fail(-1, err.getMessage()));
+                break;
+            case "processInstanceVariableValues":
+                connect()
+                        .flatMap(connection -> processInstanceVariableValues(connection,
                                 message.body().getJsonObject("parameters").getLong("processInstanceId")))
                         .subscribe((result) -> message.reply(new JsonObject().put("result", new JsonArray(result))),
                                 (err) -> message.fail(-1, err.getMessage()));
@@ -117,6 +125,27 @@ public class DbVerticle extends AbstractVerticle {
                 .map(rs -> {
                     if (rs.getRows() == null) {
                         return new ArrayList<>();
+                    } else {
+                        return rs.getRows();
+                    }
+                });
+    }
+
+    private Single<List<JsonObject>> processInstanceVariableValues(SQLConnection connection, long processInstanceId) {
+        String sql = "SELECT id, log_date, v1.processinstanceid, value, v1.variableid, variableinstanceid " +
+                "FROM public.variableinstancelog v1 " +
+                "INNER JOIN ( " +
+                "SELECT variableid, MAX(log_date) as mts, processinstanceid " +
+                "FROM public.variableinstancelog " +
+                "GROUP BY variableid, processinstanceid " +
+                ") v2 on v1.variableid = v2.variableid and v1.processinstanceid = v2.processinstanceid and v1.log_date = v2.mts " +
+                "WHERE v1.processinstanceid = ?;";
+
+        return connection.rxQueryWithParams(sql, new JsonArray().add(processInstanceId))
+                .doFinally(connection::close)
+                .map(rs-> {
+                    if (rs.getRows() == null) {
+                        return Collections.emptyList();
                     } else {
                         return rs.getRows();
                     }

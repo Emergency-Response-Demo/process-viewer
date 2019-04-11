@@ -78,7 +78,9 @@ public class ImageVerticle extends AbstractVerticle {
     private void instanceData(Message<JsonObject> message) {
         String correlationKey = message.body().getString("correlationKey");
 
-        process(correlationKey).flatMap(json ->
+        process(correlationKey)
+                .flatMap(this::addProcessVariables)
+                .flatMap(json ->
                 Single.zip(Single.just(json), imageAsByteArray(json.getString("processid")),
                         historyActive(json.getLong("processinstanceid")),
                         historyComplete(json.getLong("processinstanceid")),
@@ -98,7 +100,7 @@ public class ImageVerticle extends AbstractVerticle {
                         .flatMap(p -> processImage(p.getLeft(), p.getRight()))
                         .map(p -> Pair.of(p.getLeft(), p.getRight().replaceFirst("<\\?.*\\?>","")
                             .replaceFirst("width=\"[0-9]*\"", "width=\"1080\"")
-                             .replaceFirst("height=\"[0-9]*\"","height=\"auto\""))))
+                            .replaceFirst("height=\"[0-9]*\"","height=\"auto\""))))
                 .subscribe((result) -> message.reply(new JsonObject().put("process", result.getLeft()).put("image", result.getRight())),
                         (err) -> {
                             if (err instanceof ReplyException) {
@@ -134,6 +136,12 @@ public class ImageVerticle extends AbstractVerticle {
         }).flatMapSingle(Single::just);
     }
 
+    private Single<JsonObject> addProcessVariables(JsonObject processInstance) {
+
+        return processVariables(processInstance.getLong("processinstanceid"))
+                .map(variables -> processInstance.put("variables", variables));
+    }
+
     private byte[] imageAsBytes(String location) throws IOException {
         InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(location);
         return IOUtils.toByteArray(is);
@@ -150,6 +158,10 @@ public class ImageVerticle extends AbstractVerticle {
 
     private Single<JsonArray> historyComplete(long processInstanceId) {
         return query("processInstanceHistoryComplete", new JsonObject().put("processInstanceId", processInstanceId));
+    }
+
+    private Single<JsonArray> processVariables(long processInstanceId) {
+        return query("processInstanceVariableValues", new JsonObject().put("processInstanceId", processInstanceId));
     }
 
     private Single<JsonArray> query(String name, JsonObject parameters) {
