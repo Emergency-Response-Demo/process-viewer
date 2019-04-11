@@ -32,7 +32,7 @@ public class MainVerticle extends AbstractVerticle {
             options.addStore(localStore);
         }
 
-        ConfigRetriever retriever = ConfigRetriever.create(vertx);
+        ConfigRetriever retriever = ConfigRetriever.create(vertx, options);
         retriever.rxGetConfig()
                 .flatMapCompletable(json -> {
                     JsonObject datasource = json.getJsonObject("datasource");
