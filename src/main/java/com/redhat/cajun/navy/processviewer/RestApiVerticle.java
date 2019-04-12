@@ -3,6 +3,8 @@ package com.redhat.cajun.navy.processviewer;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import io.reactivex.Completable;
 import io.vertx.core.eventbus.ReplyException;
@@ -95,16 +97,26 @@ public class RestApiVerticle extends AbstractVerticle {
         DateTimeFormatter in = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         DateTimeFormatter out = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+        String mission = getVariableValue(data.getJsonArray("variables"), "mission");
+        String incident = getVariableValue(data.getJsonArray("variables"), "incident");
+
         return new JsonObject()
                 .put("correlationKey", data.getString("correlationkey"))
                 .put("instanceId", Long.toString(data.getLong("processinstanceid")))
                 .put("processId", data.getString("processid"))
                 .put("status", status(data.getInteger("status")))
                 .put("startDate", out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
-                .put("endDate", data.getString("end<-date") == null ? "" : out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
-                .put("duration", data.getString("duration") == null ? "" : Long.toString(data.getLong("duration") / 1000))
+                .put("endDate", data.getString("end_date") == null ? "" : out.format(LocalDateTime.from(in.parse(data.getString("end_date")))))
+                .put("duration", data.getLong("duration") == null ? "" : data.getLong("duration") / 1000)
                 .put("assignments_retries", getVariableValue(data.getJsonArray("variables"), "nrAssignments"))
+                .put("responder_id", match(".*responderId=([0-9]*),", mission))
+                .put("incident_location", coordinates(".*latitude=([-+]?[0-9.]*),",".*longitude=([-+]?[0-9.]*),", incident))
+                .put("responder_location",coordinates(".*responderLat=([-+]?[0-9.]*),",".*responderLong=([-+]?[0-9.]*),", mission))
+                .put("destination_location",coordinates(".*destinationLat=([-+]?[0-9.]*),",".*destinationLong=([-+]?[0-9.]*),", mission))
                 .put("image", data.getString("image"));
+
+
+        //responderId=87
     }
 
     private String status(int status) {
@@ -137,5 +149,27 @@ public class RestApiVerticle extends AbstractVerticle {
                 .orElse(Optional.of(""))
                 .orElse("");
     }
+
+    private String match(String pattern, String text) {
+        Pattern p = Pattern.compile(pattern);
+        Matcher matcher = p.matcher(text);
+        if (matcher.find()) {
+            return matcher.group(1);
+        } else {
+            return "";
+        }
+    }
+
+    private String coordinates(String patternLat, String patternLon, String text) {
+        String lat = match(patternLat, text);
+        String lon = match(patternLon, text);
+        if (lat.isEmpty() || lon.isEmpty()) {
+            return "";
+        } else {
+            return lat + "," + lon;
+        }
+    }
+
+
 
 }

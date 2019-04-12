@@ -34,6 +34,18 @@
     <tr>
       <td>&nbsp;&nbsp;&nbsp;&nbsp;Assignments Retries:</td><td>${assignments_retries}</td>
     </tr>
+    <tr>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Responder Id:</td><td>${responder_id}</td>
+    </tr>
+    <tr>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Incident Location:</td><td>${incident_location}</td>
+    </tr>
+    <tr>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Responder Location:</td><td>${responder_location}</td>
+    </tr>
+    <tr>
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Destination Location:</td><td>${destination_location}</td>
+    </tr>
   </tbody>
 </table>
 
