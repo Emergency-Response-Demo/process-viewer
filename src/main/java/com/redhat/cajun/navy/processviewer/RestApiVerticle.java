@@ -2,6 +2,8 @@ package com.redhat.cajun.navy.processviewer;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAccessor;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,6 +22,10 @@ import io.vertx.reactivex.ext.web.templ.freemarker.FreeMarkerTemplateEngine;
 public class RestApiVerticle extends AbstractVerticle {
 
     FreeMarkerTemplateEngine engine;
+
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+
+    DateTimeFormatter dtf2 = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.S'Z'");
 
     @Override
     public Completable rxStart() {
@@ -94,7 +100,6 @@ public class RestApiVerticle extends AbstractVerticle {
 
     private JsonObject transformProcessData(JsonObject data) {
 
-        DateTimeFormatter in = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         DateTimeFormatter out = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         String mission = getVariableValue(data.getJsonArray("variables"), "mission");
@@ -105,8 +110,8 @@ public class RestApiVerticle extends AbstractVerticle {
                 .put("instanceId", Long.toString(data.getLong("processinstanceid")))
                 .put("processId", data.getString("processid"))
                 .put("status", status(data.getInteger("status")))
-                .put("startDate", out.format(LocalDateTime.from(in.parse(data.getString("start_date")))))
-                .put("endDate", data.getString("end_date") == null ? "" : out.format(LocalDateTime.from(in.parse(data.getString("end_date")))))
+                .put("startDate", out.format(LocalDateTime.from(parse(data.getString("start_date")))))
+                .put("endDate", data.getString("end_date") == null ? "" : out.format(LocalDateTime.from(parse(data.getString("end_date")))))
                 .put("duration", data.getLong("duration") == null ? "" : data.getLong("duration") / 1000)
                 .put("assignments_retries", getVariableValue(data.getJsonArray("variables"), "nrAssignments"))
                 .put("responder_id", match(".*responderId=([0-9]*),", mission))
@@ -114,9 +119,6 @@ public class RestApiVerticle extends AbstractVerticle {
                 .put("responder_location",coordinates(".*responderLat=([-+]?[0-9.]*),",".*responderLong=([-+]?[0-9.]*),", mission))
                 .put("destination_location",coordinates(".*destinationLat=([-+]?[0-9.]*),",".*destinationLong=([-+]?[0-9.]*),", mission))
                 .put("image", data.getString("image"));
-
-
-        //responderId=87
     }
 
     private String status(int status) {
@@ -168,6 +170,16 @@ public class RestApiVerticle extends AbstractVerticle {
         } else {
             return lat + "," + lon;
         }
+    }
+
+    private TemporalAccessor parse(String date) {
+        TemporalAccessor ta;
+        try {
+            ta = dtf.parse(date);
+        } catch (DateTimeParseException e) {
+            ta = dtf2.parse(date);
+        }
+        return ta;
     }
 
 
