@@ -12,11 +12,13 @@
     <skipTests>false</skipTests>
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>
-    <version.vertx>3.6.3.redhat-00009</version.vertx>
+    <version.vertx>3.8.1.redhat-00005</version.vertx>
     <version.fabric8-maven-plugin>3.5.41</version.fabric8-maven-plugin>
-    <version.vertx-maven-plugin>1.0.18</version.vertx-maven-plugin>
+    <version.vertx-maven-plugin>1.0.20</version.vertx-maven-plugin>
     <version.postgresql>9.4.1212.jre7</version.postgresql>
     <version.agroal>1.3.0.redhat-00001</version.agroal>
+    <version.logback>1.2.3</version.logback>
+    <version.logstash>5.1</version.logstash>
     <vertx.verticle>com.redhat.cajun.navy.processviewer.MainVerticle</vertx.verticle>
   </properties>
   <dependencyManagement>
@@ -105,12 +107,12 @@
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
-      <version>1.2.3</version>
+      <version>${version.logback}</version>
     </dependency>
     <dependency>
       <groupId>net.logstash.logback</groupId>
       <artifactId>logstash-logback-encoder</artifactId>
-      <version>5.1</version>
+      <version>${version.logstash}</version>
     </dependency>
   </dependencies>
   <build>

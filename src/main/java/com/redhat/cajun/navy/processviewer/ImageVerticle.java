@@ -150,7 +150,7 @@ public class ImageVerticle extends AbstractVerticle {
         JsonObject json = new JsonObject()
                 .put("query", name)
                 .put("parameters", parameters);
-        return vertx.eventBus().<JsonObject>rxSend("query", json)
+        return vertx.eventBus().<JsonObject>rxRequest("query", json)
                 .map(m -> m.body().getJsonArray("result"));
     }
 }

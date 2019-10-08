@@ -54,7 +54,7 @@ public class RestApiVerticle extends AbstractVerticle {
     private void processImage(RoutingContext rc) {
         String processId = rc.pathParam("processId");
         JsonObject json = new JsonObject().put("processId", processId);
-        vertx.eventBus().<JsonObject>rxSend("process-image", json)
+        vertx.eventBus().<JsonObject>rxRequest("process-image", json)
                 .map(m -> new JsonObject().put("image", m.body().getString("image")))
                 .subscribe((result) -> rc.response().setStatusCode(200)
                                         .putHeader("content-type", "image/svg+xml")
@@ -65,7 +65,7 @@ public class RestApiVerticle extends AbstractVerticle {
     private void processInstanceImage(RoutingContext rc) {
         String correlationKey = rc.pathParam("correlationKey");
         JsonObject json = new JsonObject().put("correlationKey", correlationKey);
-        vertx.eventBus().<JsonObject>rxSend("process-instance-image", json)
+        vertx.eventBus().<JsonObject>rxRequest("process-instance-image", json)
                 .map(m -> new JsonObject().put("image", m.body().getString("image")))
                 .subscribe((result) -> rc.response().setStatusCode(200)
                                         .putHeader("content-type", "image/svg+xml")
@@ -82,7 +82,7 @@ public class RestApiVerticle extends AbstractVerticle {
     private void processInstanceData(RoutingContext rc) {
         String correlationKey = rc.pathParam("correlationKey");
         JsonObject json = new JsonObject().put("correlationKey", correlationKey);
-        vertx.eventBus().<JsonObject>rxSend("process-instance-data", json)
+        vertx.eventBus().<JsonObject>rxRequest("process-instance-data", json)
                 .map(m -> transformProcessData(m.body()))
                 .flatMap(ctx -> engine.rxRender(ctx, "templates/process-data.ftl"))
                 .subscribe((result) -> rc.response().setStatusCode(200)
