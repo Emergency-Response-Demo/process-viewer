@@ -4,4 +4,4 @@ ENV JAVA_APP_DIR=/deployments
 
 EXPOSE 8080 8443
 
-COPY target/process-viewer-1.0.0-SNAPSHOT.jar /deployments/
+COPY target/process-viewer-1.1.0-SNAPSHOT.jar /deployments/
